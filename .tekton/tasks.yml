@@ -1,4 +1,5 @@
----
+# .tekton/tasks.yml
+
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
@@ -21,20 +22,13 @@ spec:
         #!/usr/bin/env sh
         set -eu
         echo "Removing all files from ${WORKSPACE_SOURCE_PATH} ..."
-        # Delete any existing contents of the directory if it exists.
-        #
-        # We don't just "rm -rf ${WORKSPACE_SOURCE_PATH}" because ${WORKSPACE_SOURCE_PATH} might be "/"
-        # or the root of a mounted volume.
         if [ -d "${WORKSPACE_SOURCE_PATH}" ] ; then
-          # Delete non-hidden files and directories
           rm -rf "${WORKSPACE_SOURCE_PATH:?}"/*
-          # Delete files and directories starting with . but excluding ..
           rm -rf "${WORKSPACE_SOURCE_PATH}"/.[!.]*
-          # Delete files and directories starting with .. plus any other character
           rm -rf "${WORKSPACE_SOURCE_PATH}"/..?*
         fi
-
 ---
+
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
@@ -57,3 +51,27 @@ spec:
         python -m pip install --upgrade pip wheel
         pip install -r requirements.txt
         nosetests $(params.args)
+---
+
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: deploy
+spec:
+  params:
+    - name: app-name
+      description: The name of the application to deploy
+      type: string
+      default: "my-app"
+    - name: build-image
+      description: The image to deploy
+      type: string
+      default: "quay.io/username/my-app-image:latest"
+  steps:
+    - name: deploy
+      image: 'openshift/origin-cli:latest'
+      script: |
+        #!/bin/bash
+        set -e
+        oc create deployment $(params.app-name) --image=$(params.build-image) --dry-run=client -o yaml | oc apply -f -
+
